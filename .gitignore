@@ -1,0 +1,15 @@
+# PlatformIO
+.pio
+.pioenvs
+.piolibdeps
+.clang_complete
+.gcc-flags.json
+sdkconfig
+
+# IDE Visual Studio Code
+.vscode
+
+# System files
+.DS_Store
+*~
+
