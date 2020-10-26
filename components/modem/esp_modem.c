@@ -138,22 +138,25 @@ static void esp_handle_uart_pattern(esp_modem_dte_t *esp_dte)
  */
 static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
 {
+    ESP_LOGD(MODEM_TAG, "handle_uart_data #1 / esp_dte->receive_cb_ctx : 0x%08X", (uint32_t)esp_dte->receive_cb_ctx);
     size_t length = 0;
     uart_get_buffered_data_len(esp_dte->uart_port, &length);
+    ESP_LOGD(MODEM_TAG, "handle_uart_data #2 / length : %d, esp_dte->receive_cb_ctx : 0x%08X", length, (uint32_t)esp_dte->receive_cb_ctx);
     length = MIN(ESP_MODEM_LINE_BUFFER_SIZE, length);
+    ESP_LOGD(MODEM_TAG, "handle_uart_data #3 / length : %d", length);
     length = uart_read_bytes(esp_dte->uart_port, esp_dte->buffer, length, portMAX_DELAY);
+    ESP_LOGD(MODEM_TAG, "handle_uart_data #4 / length : %d, esp_dte->receive_cb_ctx : 0x%08X", length, (uint32_t)esp_dte->receive_cb_ctx);
     /* pass the input data to configured callback */
     if (length) {
-        ESP_LOGD(MODEM_TAG, "handle_uart_data #1, len %d", length);
-        ESP_LOG_BUFFER_HEXDUMP(MODEM_TAG, esp_dte->buffer, length, ESP_LOG_INFO);   // After that, it's crash when receive_cb == NULL
+        ESP_LOG_BUFFER_HEXDUMP(MODEM_TAG, esp_dte->buffer, length, ESP_LOG_DEBUG);
         if (esp_dte->receive_cb == NULL) {
-            ESP_LOGD(MODEM_TAG, "handle_uart_data #2, callback method is NULL");
+            ESP_LOGD(MODEM_TAG, "handle_uart_data #5 / callback method is NULL");
         }
         assert(esp_dte->receive_cb);
         esp_dte->receive_cb(esp_dte->buffer, length, esp_dte->receive_cb_ctx);
-        ESP_LOGD(MODEM_TAG, "handle_uart_data #3");
+        ESP_LOGD(MODEM_TAG, "handle_uart_data #6");
     }
-    ESP_LOGD(MODEM_TAG, "handle_uart_data #4");
+    ESP_LOGD(MODEM_TAG, "handle_uart_data #7");
 }
 
 /**
