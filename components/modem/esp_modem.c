@@ -140,6 +140,11 @@ static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
 {
     ESP_LOGD(MODEM_TAG, "handle_uart_data #1 / esp_dte->receive_cb_ctx : 0x%08X", (uint32_t)esp_dte->receive_cb_ctx);
     size_t length = 0;
+    if (!esp_dte->parent.dce || esp_dte->parent.dce->mode != MODEM_PPP_MODE) {
+        // we might receive a data event before a new DCE gets bound to this DTE
+        // if this happens, just dismiss the data event
+        return;
+    }
     uart_get_buffered_data_len(esp_dte->uart_port, &length);
     ESP_LOGD(MODEM_TAG, "handle_uart_data #2 / length : %d, esp_dte->receive_cb_ctx : 0x%08X", length, (uint32_t)esp_dte->receive_cb_ctx);
     length = MIN(ESP_MODEM_LINE_BUFFER_SIZE, length);
