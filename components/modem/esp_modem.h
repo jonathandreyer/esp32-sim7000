@@ -136,6 +136,8 @@ esp_err_t esp_modem_stop_ppp(modem_dte_t *dte);
  */
 esp_err_t esp_modem_set_rx_cb(modem_dte_t *dte, esp_modem_on_receive receive_cb, void *receive_cb_ctx);
 
+esp_err_t esp_modem_notify_ppp_netif_closed(modem_dte_t *dte);
+
 #ifdef __cplusplus
 }
 #endif
