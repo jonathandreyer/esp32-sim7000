@@ -17,7 +17,6 @@
 #include "esp_netif_ppp.h"
 #include "esp_modem.h"
 #include "esp_modem_netif.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 static const char *TAG = "esp-modem-compat";

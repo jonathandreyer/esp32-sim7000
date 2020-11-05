@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "esp_netif.h"
 #include "esp_modem.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 static const char *TAG = "esp-modem-netif";
@@ -82,11 +81,8 @@ static esp_err_t esp_modem_post_attach_start(esp_netif_t * esp_netif, void * arg
  */
 static esp_err_t modem_netif_receive_cb(void *buffer, size_t len, void *context)
 {
-    ESP_LOGD(TAG, "modem_netif_receive_cb called");
     esp_modem_netif_driver_t *driver = context;
-    ESP_LOGD(TAG, "modem_netif_receive_cb context setup");
     esp_netif_receive(driver->base.netif, buffer, len, NULL);
-    ESP_LOGD(TAG, "modem_netif_receive_cb call esp_netif_receive");
     return ESP_OK;
 }
 
@@ -97,7 +93,6 @@ void *esp_modem_netif_setup(modem_dte_t *dte)
         ESP_LOGE(TAG, "Cannot allocate esp_modem_netif_driver_t");
         goto drv_create_failed;
     }
-    ESP_LOGD(TAG, "esp_modem_set_rx_cb set");
     esp_err_t err = esp_modem_set_rx_cb(dte, modem_netif_receive_cb, driver);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "esp_modem_set_rx_cb failed with: %d", err);

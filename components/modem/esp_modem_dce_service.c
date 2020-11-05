@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <string.h>
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "esp_modem_dce_service.h"
 
@@ -20,7 +19,7 @@
  * @brief Macro defined for error checking
  *
  */
-static const char *DCE_TAG = "dce-service";
+static const char *DCE_TAG = "dce_service";
 #define DCE_CHECK(a, str, goto_tag, ...)                                              \
     do                                                                                \
     {                                                                                 \
@@ -33,8 +32,6 @@ static const char *DCE_TAG = "dce-service";
 
 esp_err_t esp_modem_dce_handle_response_default(modem_dce_t *dce, const char *line)
 {
-    ESP_LOGD(DCE_TAG, "Default handling: %s", line);
-    ESP_LOG_BUFFER_HEXDUMP(DCE_TAG, line, strlen(line), ESP_LOG_DEBUG);
     esp_err_t err = ESP_FAIL;
     if (strstr(line, MODEM_RESULT_CODE_SUCCESS)) {
         err = esp_modem_process_command_done(dce, MODEM_STATE_SUCCESS);

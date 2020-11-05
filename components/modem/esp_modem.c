@@ -18,7 +18,6 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_modem.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "sdkconfig.h"
 
@@ -58,18 +57,19 @@ typedef struct {
     TaskHandle_t uart_event_task_hdl;       /*!< UART event task handle */
     SemaphoreHandle_t process_sem;          /*!< Semaphore used for indicating processing status */
     modem_dte_t parent;                     /*!< DTE interface that should extend */
-    esp_modem_on_receive receive_cb;        /*!< ptr to data reception */
-    void *receive_cb_ctx;                   /*!< ptr to rx fn context data */
+    esp_modem_on_receive         receive_cb;      /*!< ptr to data reception */
+    void                            *receive_cb_ctx; /*!< ptr to rx fn context data */
 } esp_modem_dte_t;
+
 
 esp_err_t esp_modem_set_rx_cb(modem_dte_t *dte, esp_modem_on_receive receive_cb, void *receive_cb_ctx)
 {
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
     esp_dte->receive_cb_ctx = receive_cb_ctx;
-    ESP_LOGD(MODEM_TAG, "callback receive_cb set");
     esp_dte->receive_cb = receive_cb;
     return ESP_OK;
 }
+
 
 /**
  * @brief Handle one line in DTE
@@ -86,7 +86,6 @@ static esp_err_t esp_dte_handle_line(esp_modem_dte_t *esp_dte)
     const char *line = (const char *)(esp_dte->buffer);
     /* Skip pure "\r\n" lines */
     if (strlen(line) > 2) {
-        ESP_LOGD(MODEM_TAG, "modem>>: %s", line);
         MODEM_CHECK(dce->handle_line, "no handler for line", err_handle);
         MODEM_CHECK(dce->handle_line(dce, line) == ESP_OK, "handle line failed", err_handle);
     }
@@ -144,16 +143,8 @@ static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
     length = uart_read_bytes(esp_dte->uart_port, esp_dte->buffer, length, portMAX_DELAY);
     /* pass the input data to configured callback */
     if (length) {
-        ESP_LOGD(MODEM_TAG, "handle_uart_data #1, len %d", length);
-        ESP_LOG_BUFFER_HEXDUMP(MODEM_TAG, esp_dte->buffer, length, ESP_LOG_INFO);   // After that, it's crash when receive_cb == NULL
-        if (esp_dte->receive_cb == NULL) {
-            ESP_LOGD(MODEM_TAG, "handle_uart_data #2, callback method is NULL");
-        }
-        assert(esp_dte->receive_cb);
         esp_dte->receive_cb(esp_dte->buffer, length, esp_dte->receive_cb_ctx);
-        ESP_LOGD(MODEM_TAG, "handle_uart_data #3");
     }
-    ESP_LOGD(MODEM_TAG, "handle_uart_data #4");
 }
 
 /**
@@ -226,7 +217,6 @@ static esp_err_t esp_modem_dte_send_cmd(modem_dte_t *dte, const char *command, u
     dce->state = MODEM_STATE_PROCESSING;
     /* Send command via UART */
     uart_write_bytes(esp_dte->uart_port, command, strlen(command));
-    ESP_LOGD(MODEM_TAG, "modem<<: %s", command);
     /* Check timeout */
     MODEM_CHECK(xSemaphoreTake(esp_dte->process_sem, pdMS_TO_TICKS(timeout)) == pdTRUE, "process command timeout", err);
     ret = ESP_OK;
@@ -251,6 +241,8 @@ static int esp_modem_dte_send_data(modem_dte_t *dte, const char *data, uint32_t 
 err:
     return -1;
 }
+
+
 
 /**
  * @brief Send data and wait for prompt from DCE
@@ -360,6 +352,8 @@ static esp_err_t esp_modem_dte_deinit(modem_dte_t *dte)
     return ESP_OK;
 }
 
+
+
 modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
 {
     esp_err_t res;
@@ -396,11 +390,9 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
 
     MODEM_CHECK(uart_param_config(esp_dte->uart_port, &uart_config) == ESP_OK, "config uart parameter failed", err_uart_config);
     if (config->flow_control == MODEM_FLOW_CONTROL_HW) {
-        ESP_LOGD(MODEM_TAG, "flow control is HW");
         res = uart_set_pin(esp_dte->uart_port, CONFIG_EXAMPLE_UART_MODEM_TX_PIN, CONFIG_EXAMPLE_UART_MODEM_RX_PIN,
                            CONFIG_EXAMPLE_UART_MODEM_RTS_PIN, CONFIG_EXAMPLE_UART_MODEM_CTS_PIN);
     } else {
-        ESP_LOGD(MODEM_TAG, "flow control is DISABLE");
         res = uart_set_pin(esp_dte->uart_port, CONFIG_EXAMPLE_UART_MODEM_TX_PIN, CONFIG_EXAMPLE_UART_MODEM_RX_PIN,
                            UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     }

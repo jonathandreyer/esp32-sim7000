@@ -15,7 +15,6 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "esp_modem_dce_service.h"
@@ -187,16 +186,12 @@ static esp_err_t sim800_handle_cimi(modem_dce_t *dce, const char *line)
  */
 static esp_err_t sim800_handle_cops(modem_dce_t *dce, const char *line)
 {
-    ESP_LOGD(DCE_TAG, "Handling sim800_handle_cops: %s", line);
     esp_err_t err = ESP_FAIL;
     if (strstr(line, MODEM_RESULT_CODE_SUCCESS)) {
-        ESP_LOGD(DCE_TAG, "Handling sim800_handle_cops #1: %s", line);
         err = esp_modem_process_command_done(dce, MODEM_STATE_SUCCESS);
     } else if (strstr(line, MODEM_RESULT_CODE_ERROR)) {
-        ESP_LOGW(DCE_TAG, "Handling sim800_handle_cops #2: %s", line);
         err = esp_modem_process_command_done(dce, MODEM_STATE_FAIL);
     } else if (!strncmp(line, "+COPS", strlen("+COPS"))) {
-        ESP_LOGD(DCE_TAG, "Handling sim800_handle_cops #3: %s", line);
         /* there might be some random spaces in operator's name, we can not use sscanf to parse the result */
         /* strtok will break the string, we need to create a copy */
         size_t len = strlen(line);
@@ -220,8 +215,6 @@ static esp_err_t sim800_handle_cops(modem_dce_t *dce, const char *line)
             }
         }
         free(line_copy);
-        ESP_LOGD(DCE_TAG, "Handling sim800_handle_cops #4: line has been free");
-        ESP_LOGD(DCE_TAG, "Handling sim800_handle_cops #5: %d", err);
     }
     return err;
 }
@@ -335,12 +328,8 @@ err:
  */
 static esp_err_t sim800_power_up()
 {
-    ESP_LOGD(DCE_TAG, "start power-up SIM800 module");
-
     bool status = false;
     int inc = 0;
-
-    ESP_LOGD(DCE_TAG, "launch STATUS reading");
     do
     {
         vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -353,40 +342,30 @@ static esp_err_t sim800_power_up()
             vTaskDelay(30 / portTICK_PERIOD_MS);
             status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
         }
-        ESP_LOGD(DCE_TAG, "STATUS is %d, inc is %d", status, inc);
     } while (!(status==true || inc>20));
-    ESP_LOGD(DCE_TAG, "End of loop!");
 
     if (!status) {
         ESP_LOGI(DCE_TAG, "module seems not powered on");
-
         // Power-on module (pulse of 100ms on PWRKEY pin)
-        ESP_LOGD(DCE_TAG, "module will be power-up");
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_PWRKEY, 1);
         vTaskDelay(100 / portTICK_PERIOD_MS);
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_PWRKEY, 0);
-        ESP_LOGD(DCE_TAG, "Pulse on PWRKEY is done");
 
         vTaskDelay(1100 / portTICK_PERIOD_MS);
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_PWRKEY, 1);
 
         // Wait time of startup (5sec)
-        ESP_LOGD(DCE_TAG, "Start waiting 5sec (minimal startup time)");
         for (int i = 0; i < 4; i++)
         {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
             ESP_LOGD(DCE_TAG, ".");
         }
-        ESP_LOGD(DCE_TAG, "end of delay");
 
-        ESP_LOGD(DCE_TAG, "launch STATUS reading (again)");
         status = false;
         inc = 0;
         do
         {
             vTaskDelay(500 / portTICK_PERIOD_MS);
             inc += 1;
-            ESP_LOGD(DCE_TAG, ".");
             status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
 
             // Unbounce input
@@ -394,7 +373,6 @@ static esp_err_t sim800_power_up()
                 vTaskDelay(30 / portTICK_PERIOD_MS);
                 status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
             }
-            ESP_LOGD(DCE_TAG, "STATUS is %d", status);
         } while (!(status==true || inc>20));
 
         if (!status) {
@@ -405,7 +383,6 @@ static esp_err_t sim800_power_up()
 
     // Wait 2sec to ensure that module is ready to communicate
     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    ESP_LOGD(DCE_TAG, "STATUS of module is OK");
 
     return ESP_OK;
 }
@@ -520,53 +497,41 @@ err:
  */
 static esp_err_t sim800_open(modem_dce_t *dce)
 {
-    ESP_LOGD(DCE_TAG, "start opening of SIM800 module");
-
     sim800_modem_dce_t *sim800_dce = __containerof(dce, sim800_modem_dce_t, parent);
     bool sync = false;
     bool status = false;
     int inc = 0;
 
-    ESP_LOGD(DCE_TAG, "try to sync with the module");
     do
     {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         inc += 1;
-        ESP_LOGD(DCE_TAG, ".");
         sync = esp_modem_dce_sync(&(sim800_dce->parent)) == ESP_OK;
-        ESP_LOGD(DCE_TAG, "SYNC is %d, inc is %d", sync, inc);
     } while (!(sync==true || inc>10));
 
     if (!sync) {
         ESP_LOGI(DCE_TAG, "module is not reacheable");
 
         // Reset on module (300ms on NRESET pin)
-        ESP_LOGD(DCE_TAG, "module will be reset");
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_RESET, 1);
         vTaskDelay(300 / portTICK_PERIOD_MS);
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_RESET, 0);
-        ESP_LOGD(DCE_TAG, "Pulse on RESET is done");
 
         vTaskDelay(1100 / portTICK_PERIOD_MS);
         gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_PWRKEY, 1);
 
         // Wait time of reboot (6sec)
-        ESP_LOGD(DCE_TAG, "Start waiting 6sec (minimal reset time)");
         for (int i = 0; i < 5; i++)
         {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
-            ESP_LOGD(DCE_TAG, ".");
         }
-        ESP_LOGD(DCE_TAG, "end of delay");
 
-        ESP_LOGD(DCE_TAG, "launch STATUS reading");
         status = false;
         inc = 0;
         do
         {
             vTaskDelay(500 / portTICK_PERIOD_MS);
             inc += 1;
-            ESP_LOGD(DCE_TAG, ".");
             status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
 
             // Unbounce input
@@ -574,7 +539,6 @@ static esp_err_t sim800_open(modem_dce_t *dce)
                 vTaskDelay(30 / portTICK_PERIOD_MS);
                 status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
             }
-            ESP_LOGD(DCE_TAG, "STATUS is %d", status);
         } while (!(status==true || inc>20));
 
         if (!status) {
@@ -582,24 +546,19 @@ static esp_err_t sim800_open(modem_dce_t *dce)
             return ESP_FAIL;
         }
 
-        ESP_LOGD(DCE_TAG, "try to sync with the module");
         sync = false;
         inc = 0;
         do
         {
             vTaskDelay(1000 / portTICK_PERIOD_MS);
             inc += 1;
-            ESP_LOGD(DCE_TAG, ".");
             sync = esp_modem_dce_sync(&(sim800_dce->parent)) == ESP_OK;
-            ESP_LOGD(DCE_TAG, "STATUS is %d, inc is %d", status, inc);
         } while (!(sync==true || inc>10));
 
         if (!sync) {
             ESP_LOGE(DCE_TAG, "failed to opening module (sync procedure not working)");
             return ESP_FAIL;
         }
-    } else {
-        ESP_LOGD(DCE_TAG, "SYNC test is OK");
     }
 
     /* Sync between DTE and DCE */

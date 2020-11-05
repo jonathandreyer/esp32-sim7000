@@ -14,14 +14,13 @@
 #include "mqtt_client.h"
 #include "esp_modem.h"
 #include "esp_modem_netif.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 #include "sim800.h"
 #include "bg96.h"
 
 #define BROKER_URL "mqtt://mqtt.eclipse.org"
 
-static const char *TAG = "pppos-example";
+static const char *TAG = "pppos_example";
 static EventGroupHandle_t event_group = NULL;
 static const int CONNECT_BIT = BIT0;
 static const int STOP_BIT = BIT1;
@@ -178,6 +177,7 @@ static void on_ppp_changed(void *arg, esp_event_base_t event_base,
     }
 }
 
+
 static void on_ip_event(void *arg, esp_event_base_t event_base,
                       int32_t event_id, void *event_data)
 {
@@ -213,8 +213,6 @@ static void on_ip_event(void *arg, esp_event_base_t event_base,
 
 void app_main(void)
 {
-    esp_log_level_set("*", ESP_LOG_VERBOSE);
-
 #if CONFIG_LWIP_PPP_PAP_SUPPORT
     esp_netif_auth_type_t auth_type = NETIF_PPP_AUTHTYPE_PAP;
 #elif CONFIG_LWIP_PPP_CHAP_SUPPORT
@@ -242,12 +240,9 @@ void app_main(void)
     /* create dce object */
 #if CONFIG_EXAMPLE_MODEM_DEVICE_SIM800
     modem_dce_t *dce = sim800_init(dte);
-    ESP_LOGD(TAG, "Device SIM800 is init()");
     assert(dce);
     ESP_ERROR_CHECK(dce->power_up());
-    ESP_LOGD(TAG, "Device SIM800 is power_up()");
     ESP_ERROR_CHECK(dce->open(dce));
-    ESP_LOGD(TAG, "Device SIM800 is open()");
 #elif CONFIG_EXAMPLE_MODEM_DEVICE_BG96
     modem_dce_t *dce = bg96_init(dte);
 #else
@@ -255,7 +250,6 @@ void app_main(void)
 #endif
     ESP_ERROR_CHECK(dce->set_flow_ctrl(dce, MODEM_FLOW_CONTROL_NONE));
     ESP_ERROR_CHECK(dce->store_profile(dce));
-
     /* Print Module ID, Operator, IMEI, IMSI */
     ESP_LOGI(TAG, "Module: %s", dce->name);
     ESP_LOGI(TAG, "Operator: %s", dce->oper);
@@ -269,7 +263,6 @@ void app_main(void)
     uint32_t voltage = 0, bcs = 0, bcl = 0;
     ESP_ERROR_CHECK(dce->get_battery_status(dce, &bcs, &bcl, &voltage));
     ESP_LOGI(TAG, "Battery voltage: %d mV", voltage);
-
     /* setup PPPoS network parameters */
     esp_netif_ppp_set_auth(esp_netif, auth_type, CONFIG_EXAMPLE_MODEM_PPP_AUTH_USERNAME, CONFIG_EXAMPLE_MODEM_PPP_AUTH_PASSWORD);
     void *modem_netif_adapter = esp_modem_netif_setup(dte);
@@ -278,7 +271,6 @@ void app_main(void)
     esp_netif_attach(esp_netif, modem_netif_adapter);
     /* Wait for IP address */
     xEventGroupWaitBits(event_group, CONNECT_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-
     /* Config MQTT */
     esp_mqtt_client_config_t mqtt_config = {
         .uri = BROKER_URL,
@@ -288,20 +280,17 @@ void app_main(void)
     esp_mqtt_client_start(mqtt_client);
     xEventGroupWaitBits(event_group, GOT_DATA_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
     esp_mqtt_client_destroy(mqtt_client);
-
     /* Exit PPP mode */
     ESP_ERROR_CHECK(esp_modem_stop_ppp(dte));
     /* Destroy the netif adapter withe events, which internally frees also the esp-netif instance */
     esp_modem_netif_clear_default_handlers(modem_netif_adapter);
     esp_modem_netif_teardown(modem_netif_adapter);
     xEventGroupWaitBits(event_group, STOP_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-
 #if CONFIG_EXAMPLE_SEND_MSG
     const char *message = "Welcome to ESP32!";
     ESP_ERROR_CHECK(example_send_message_text(dce, CONFIG_EXAMPLE_SEND_MSG_PEER_PHONE_NUMBER, message));
     ESP_LOGI(TAG, "Send send message [%s] ok", message);
 #endif
-
     /* Power down module */
     ESP_ERROR_CHECK(dce->power_down(dce));
     ESP_LOGI(TAG, "Power down");
