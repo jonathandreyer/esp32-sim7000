@@ -57,6 +57,7 @@ typedef struct {
     esp_event_loop_handle_t event_loop_hdl; /*!< Event loop handle */
     TaskHandle_t uart_event_task_hdl;       /*!< UART event task handle */
     SemaphoreHandle_t process_sem;          /*!< Semaphore used for indicating processing status */
+    SemaphoreHandle_t   exit_sem;           /*!< Semaphore used for indicating PPP mode has stopped */
     modem_dte_t parent;                     /*!< DTE interface that should extend */
     esp_modem_on_receive receive_cb;        /*!< ptr to data reception */
     void *receive_cb_ctx;                   /*!< ptr to rx fn context data */
@@ -354,8 +355,9 @@ static esp_err_t esp_modem_dte_deinit(modem_dte_t *dte)
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
     /* Delete UART event task */
     vTaskDelete(esp_dte->uart_event_task_hdl);
-    /* Delete semaphore */
+    /* Delete semaphores */
     vSemaphoreDelete(esp_dte->process_sem);
+    vSemaphoreDelete(esp_dte->exit_sem);
     /* Delete event loop */
     esp_event_loop_delete(esp_dte->event_loop_hdl);
     /* Uninstall UART Driver */
@@ -402,6 +404,8 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
     res = uart_driver_install(esp_dte->uart_port, CONFIG_EXAMPLE_UART_RX_BUFFER_SIZE, CONFIG_EXAMPLE_UART_TX_BUFFER_SIZE,
                               CONFIG_EXAMPLE_UART_EVENT_QUEUE_SIZE, &(esp_dte->event_queue), 0);
     MODEM_CHECK(res == ESP_OK, "install uart driver failed", err_uart_config);
+    res = uart_set_rx_timeout(esp_dte->uart_port, 1);
+    MODEM_CHECK(res == ESP_OK, "set rx timeout failed", err_uart_config);
 
     MODEM_CHECK(uart_param_config(esp_dte->uart_port, &uart_config) == ESP_OK, "config uart parameter failed", err_uart_config);
     if (config->flow_control == MODEM_FLOW_CONTROL_HW) {
@@ -434,7 +438,9 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
     MODEM_CHECK(esp_event_loop_create(&loop_args, &esp_dte->event_loop_hdl) == ESP_OK, "create event loop failed", err_eloop);
     /* Create semaphore */
     esp_dte->process_sem = xSemaphoreCreateBinary();
-    MODEM_CHECK(esp_dte->process_sem, "create process semaphore failed", err_sem);
+    MODEM_CHECK(esp_dte->process_sem, "create process semaphore failed", err_sem1);
+    esp_dte->exit_sem = xSemaphoreCreateBinary();
+    MODEM_CHECK(esp_dte->exit_sem, "create exit semaphore failed", err_sem);
     /* Create UART Event task */
     BaseType_t ret = xTaskCreate(uart_event_task_entry,             //Task Entry
                                  "uart_event",                      //Task Name
@@ -447,8 +453,10 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
     return &(esp_dte->parent);
     /* Error handling */
 err_tsk_create:
-    vSemaphoreDelete(esp_dte->process_sem);
+    vSemaphoreDelete(esp_dte->exit_sem);
 err_sem:
+    vSemaphoreDelete(esp_dte->process_sem);
+err_sem1:
     esp_event_loop_delete(esp_dte->event_loop_hdl);
 err_eloop:
     uart_disable_pattern_det_intr(esp_dte->uart_port);
@@ -499,6 +507,10 @@ esp_err_t esp_modem_stop_ppp(modem_dte_t *dte)
 
     /* post PPP mode stopped event */
     esp_event_post_to(esp_dte->event_loop_hdl, ESP_MODEM_EVENT, ESP_MODEM_EVENT_PPP_STOP, NULL, 0, 0);
+    /* wait for the PPP mode to exit gracefully */
+    if (xSemaphoreTake(esp_dte->exit_sem, pdMS_TO_TICKS(20000)) != pdTRUE) {
+        ESP_LOGW(MODEM_TAG, "Failed to exit the PPP mode gracefully");
+    }
     /* Enter command mode */
     MODEM_CHECK(dte->change_mode(dte, MODEM_COMMAND_MODE) == ESP_OK, "enter command mode failed", err);
     /* Hang up */
@@ -506,4 +518,10 @@ esp_err_t esp_modem_stop_ppp(modem_dte_t *dte)
     return ESP_OK;
 err:
     return ESP_FAIL;
+}
+
+esp_err_t esp_modem_notify_ppp_netif_closed(modem_dte_t *dte)
+{
+    esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
+    return xSemaphoreGive(esp_dte->exit_sem) == pdTRUE ? ESP_OK : ESP_FAIL;
 }
