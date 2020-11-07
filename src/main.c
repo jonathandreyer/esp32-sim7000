@@ -295,4 +295,5 @@ void app_main(void)
     ESP_LOGI(TAG, "Power down");
     ESP_ERROR_CHECK(dce->deinit(dce));
     ESP_ERROR_CHECK(dte->deinit(dte));
+    ESP_LOGI(TAG, "End of main");
 }
