@@ -240,7 +240,6 @@ void app_main(void)
     /* create dce object */
 #if CONFIG_EXAMPLE_MODEM_DEVICE_SIM800
     modem_dce_t *dce = sim800_init(dte);
-    assert(dce);
     ESP_ERROR_CHECK(dce->power_up());
     ESP_ERROR_CHECK(dce->open(dce));
 #elif CONFIG_EXAMPLE_MODEM_DEVICE_BG96

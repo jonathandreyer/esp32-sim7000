@@ -334,7 +334,6 @@ static esp_err_t sim800_power_up()
     {
         vTaskDelay(500 / portTICK_PERIOD_MS);
         inc += 1;
-        ESP_LOGD(DCE_TAG, ".");
         status = gpio_get_level(CONFIG_EXAMPLE_GPIO_MODEM_STATUS) > 0;
 
         // Unbounce input
@@ -357,7 +356,7 @@ static esp_err_t sim800_power_up()
         // Wait time of startup (5sec)
         for (int i = 0; i < 4; i++)
         {
-            ESP_LOGD(DCE_TAG, ".");
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
 
         status = false;
