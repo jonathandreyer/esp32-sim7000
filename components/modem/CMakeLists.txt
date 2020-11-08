@@ -3,6 +3,7 @@ set(srcs "esp_modem.c"
          "esp_modem_netif.c"
          "esp_modem_compat.c"
          "sim800.c"
+         "sim7600.c"
          "bg96.c")
 
 idf_component_register(SRCS "${srcs}"
