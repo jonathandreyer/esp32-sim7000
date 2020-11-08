@@ -237,8 +237,10 @@ void app_main(void)
     /* create dte object */
     esp_modem_dte_config_t config = ESP_MODEM_DTE_DEFAULT_CONFIG();
     modem_dte_t *dte = esp_modem_dte_init(&config);
+    ESP_LOGD(TAG, "DTE setup by esp_modem_dte_init()");
     /* Register event handler */
     ESP_ERROR_CHECK(esp_modem_set_event_handler(dte, modem_event_handler, ESP_EVENT_ANY_ID, NULL));
+    ESP_LOGD(TAG, "Set event handler - esp_modem_set_event_handler()");
     /* create dce object */
 #if CONFIG_EXAMPLE_MODEM_DEVICE_SIM800
     modem_dce_t *dce = sim800_init(dte);
@@ -307,4 +309,5 @@ void app_main(void)
     ESP_LOGI(TAG, "Power down");
     ESP_ERROR_CHECK(dce->deinit(dce));
     ESP_ERROR_CHECK(dte->deinit(dte));
+    ESP_LOGI(TAG, "End of main");
 }

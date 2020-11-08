@@ -174,11 +174,15 @@ static void uart_event_task_entry(void *param)
 {
     esp_modem_dte_t *esp_dte = (esp_modem_dte_t *)param;
     uart_event_t event;
+    ESP_LOGD(MODEM_TAG, "uart event task - started");
     while (1) {
         if (xQueueReceive(esp_dte->event_queue, &event, pdMS_TO_TICKS(100))) {
+            ESP_LOGD(MODEM_TAG, "uart event task - new event, type : %d", event.type);
             switch (event.type) {
             case UART_DATA:
+                ESP_LOGD(MODEM_TAG, "uart event task - start of uart data");
                 esp_handle_uart_data(esp_dte);
+                ESP_LOGD(MODEM_TAG, "uart event task - end of uart data");
                 break;
             case UART_FIFO_OVF:
                 ESP_LOGW(MODEM_TAG, "HW FIFO Overflow");
@@ -200,7 +204,9 @@ static void uart_event_task_entry(void *param)
                 ESP_LOGE(MODEM_TAG, "Frame Error");
                 break;
             case UART_PATTERN_DET:
+                ESP_LOGD(MODEM_TAG, "uart event task - start of uart pattern");
                 esp_handle_uart_pattern(esp_dte);
+                ESP_LOGD(MODEM_TAG, "uart event task - end of uart pattern");
                 break;
             default:
                 ESP_LOGW(MODEM_TAG, "unknown uart event type: %d", event.type);
@@ -436,6 +442,7 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
     esp_dte->process_sem = xSemaphoreCreateBinary();
     MODEM_CHECK(esp_dte->process_sem, "create process semaphore failed", err_sem);
     /* Create UART Event task */
+    ESP_LOGD(MODEM_TAG, "check handle address / esp_dte->receive_cb_ctx : 0x%08X", (uint32_t)esp_dte->receive_cb_ctx);
     BaseType_t ret = xTaskCreate(uart_event_task_entry,             //Task Entry
                                  "uart_event",                      //Task Name
                                  CONFIG_EXAMPLE_UART_EVENT_TASK_STACK_SIZE, //Task Stack Size(Bytes)
@@ -443,6 +450,7 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
                                  CONFIG_EXAMPLE_UART_EVENT_TASK_PRIORITY,   //Task Priority
                                  & (esp_dte->uart_event_task_hdl)   //Task Handler
                                 );
+    ESP_LOGD(MODEM_TAG, "uart event task - created");
     MODEM_CHECK(ret == pdTRUE, "create uart event task failed", err_tsk_create);
     return &(esp_dte->parent);
     /* Error handling */
