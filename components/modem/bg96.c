@@ -274,9 +274,15 @@ static esp_err_t bg96_set_working_mode(modem_dce_t *dce, modem_mode_t mode)
     switch (mode) {
     case MODEM_COMMAND_MODE:
         dce->handle_line = bg96_handle_exit_data_mode;
-        DCE_CHECK(dte->send_cmd(dte, "+++", MODEM_COMMAND_TIMEOUT_MODE_CHANGE) == ESP_OK, "send command failed", err);
-        DCE_CHECK(dce->state == MODEM_STATE_SUCCESS, "enter command mode failed", err);
-        ESP_LOGD(DCE_TAG, "enter command mode ok");
+        if (dte->send_cmd(dte, "+++", MODEM_COMMAND_TIMEOUT_MODE_CHANGE) != ESP_OK) {
+            ESP_LOGW(DCE_TAG, "Sending \"+++\" command failed");
+            dce->handle_line = esp_modem_dce_handle_response_default;
+            DCE_CHECK(dte->send_cmd(dte, "AT\r", MODEM_COMMAND_TIMEOUT_DEFAULT) == ESP_OK, "send command failed", err);
+            DCE_CHECK(dce->state == MODEM_STATE_SUCCESS, "sync failed", err);
+        } else {
+            DCE_CHECK(dce->state == MODEM_STATE_SUCCESS, "enter command mode failed", err);
+            ESP_LOGD(DCE_TAG, "enter command mode ok");
+        }
         dce->mode = MODEM_COMMAND_MODE;
         break;
     case MODEM_PPP_MODE:
