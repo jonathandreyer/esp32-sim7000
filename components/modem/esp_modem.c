@@ -143,6 +143,12 @@ static void esp_handle_uart_pattern(esp_modem_dte_t *esp_dte)
         }
     } else {
         ESP_LOGW(MODEM_TAG, "Pattern Queue Size too small");
+        size_t length = 0;
+        uart_get_buffered_data_len(esp_dte->uart_port, &length);
+        ESP_LOGW(MODEM_TAG, "Pattern Queue Size too small: length = %d", length);
+        length = MIN(esp_dte->line_buffer_size-1, length);
+        length = uart_read_bytes(esp_dte->uart_port, esp_dte->buffer, length, portMAX_DELAY);
+        ESP_LOG_BUFFER_HEXDUMP(MODEM_TAG, esp_dte->buffer, length, ESP_LOG_INFO);
         uart_flush(esp_dte->uart_port);
     }
 }
@@ -154,15 +160,27 @@ static void esp_handle_uart_pattern(esp_modem_dte_t *esp_dte)
  */
 static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
 {
-    if (esp_dte->parent.dce->mode != MODEM_PPP_MODE) {
-        ESP_LOGE(MODEM_TAG, "Error: Got data event in PPP mode");
-        /* pattern detection mode -> ignore date event on uart
-        * (should never happen, but if it does, we could still
-        * read the valid data once pattern detect event fired) */
-        return;
-    }
     size_t length = 0;
     uart_get_buffered_data_len(esp_dte->uart_port, &length);
+    if (esp_dte->parent.dce->mode != MODEM_PPP_MODE) {
+        int pos = uart_pattern_pop_pos(esp_dte->uart_port);
+        if (pos > -1) {
+            esp_handle_uart_pattern(esp_dte);
+            return;
+        }
+        // Read the data and process it using `handle_line` logic
+        length = MIN(esp_dte->line_buffer_size-1, length);
+        length = uart_read_bytes(esp_dte->uart_port, esp_dte->buffer, length, portMAX_DELAY);
+        ESP_LOG_BUFFER_HEXDUMP(MODEM_TAG, esp_dte->buffer, length, ESP_LOG_DEBUG);
+        esp_dte->buffer[length] = '\0';
+        if (esp_dte->parent.dce->handle_line) {
+            /* Send new line to handle if handler registered */
+            esp_dte_handle_line(esp_dte);
+        }
+        return;
+    }
+
+    // Expected data event to be passed to PPPD
     length = MIN(esp_dte->line_buffer_size, length);
     length = uart_read_bytes(esp_dte->uart_port, esp_dte->buffer, length, portMAX_DELAY);
     /* pass the input data to configured callback */
@@ -261,6 +279,10 @@ static int esp_modem_dte_send_data(modem_dte_t *dte, const char *data, uint32_t 
 {
     MODEM_CHECK(data, "data is NULL", err);
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
+    if (esp_dte->parent.dce->mode == MODEM_TRANSITION_MODE) {
+        ESP_LOGD(MODEM_TAG, "Not sending data in transition mode");
+        return -1;
+    }
     return uart_write_bytes(esp_dte->uart_port, data, length);
 err:
     return -1;
@@ -320,24 +342,28 @@ static esp_err_t esp_modem_dte_change_mode(modem_dte_t *dte, modem_mode_t new_mo
     modem_dce_t *dce = dte->dce;
     MODEM_CHECK(dce, "DTE has not yet bind with DCE", err);
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
-    MODEM_CHECK(dce->mode != new_mode, "already in mode: %d", err, new_mode);
+    modem_mode_t current_mode = dce->mode;
+    MODEM_CHECK(current_mode != new_mode, "already in mode: %d", err, new_mode);
+    dce->mode = MODEM_TRANSITION_MODE; // mode to be switched in set_working_mode() on success (or restored on failure)
     switch (new_mode) {
     case MODEM_PPP_MODE:
-        MODEM_CHECK(dce->set_working_mode(dce, new_mode) == ESP_OK, "set new working mode:%d failed", err, new_mode);
+        MODEM_CHECK(dce->set_working_mode(dce, new_mode) == ESP_OK, "set new working mode:%d failed", err_restore_mode, new_mode);
         uart_disable_pattern_det_intr(esp_dte->uart_port);
         uart_enable_rx_intr(esp_dte->uart_port);
         break;
     case MODEM_COMMAND_MODE:
+        MODEM_CHECK(dce->set_working_mode(dce, new_mode) == ESP_OK, "set new working mode:%d failed", err_restore_mode, new_mode);
         uart_disable_rx_intr(esp_dte->uart_port);
         uart_flush(esp_dte->uart_port);
         uart_enable_pattern_det_baud_intr(esp_dte->uart_port, '\n', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
         uart_pattern_queue_reset(esp_dte->uart_port, esp_dte->pattern_queue_size);
-        MODEM_CHECK(dce->set_working_mode(dce, new_mode) == ESP_OK, "set new working mode:%d failed", err, new_mode);
         break;
     default:
         break;
     }
     return ESP_OK;
+err_restore_mode:
+    dce->mode = current_mode;
 err:
     return ESP_FAIL;
 }
@@ -428,7 +454,7 @@ modem_dte_t *esp_modem_dte_init(const esp_modem_dte_config_t *config)
     res = uart_driver_install(esp_dte->uart_port, config->rx_buffer_size, config->tx_buffer_size,
                             config->event_queue_size, &(esp_dte->event_queue), 0);
     MODEM_CHECK(res == ESP_OK, "install uart driver failed", err_uart_config);
-    res = uart_set_rx_timeout(esp_dte->uart_port, 1);
+    res = uart_set_rx_timeout(esp_dte->uart_port, 10);
     MODEM_CHECK(res == ESP_OK, "set rx timeout failed", err_uart_config);
 
     /* Set pattern interrupt, used to detect the end of a line. */
@@ -511,10 +537,10 @@ esp_err_t esp_modem_stop_ppp(modem_dte_t *dte)
     MODEM_CHECK(dce, "DTE has not yet bind with DCE", err);
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
 
-    /* post PPP mode stopped event */
-    esp_event_post_to(esp_dte->event_loop_hdl, ESP_MODEM_EVENT, ESP_MODEM_EVENT_PPP_STOP, NULL, 0, 0);
     /* Enter command mode */
     MODEM_CHECK(dte->change_mode(dte, MODEM_COMMAND_MODE) == ESP_OK, "enter command mode failed", err);
+    /* post PPP mode stopped event */
+    esp_event_post_to(esp_dte->event_loop_hdl, ESP_MODEM_EVENT, ESP_MODEM_EVENT_PPP_STOP, NULL, 0, 0);
     /* Hang up */
     MODEM_CHECK(dce->hang_up(dce) == ESP_OK, "hang up failed", err);
     return ESP_OK;
