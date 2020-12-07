@@ -160,6 +160,13 @@ static void esp_handle_uart_pattern(esp_modem_dte_t *esp_dte)
  */
 static void esp_handle_uart_data(esp_modem_dte_t *esp_dte)
 {
+    if (esp_dte->parent.dce == NULL) {
+        // No action on data event when DCE null.
+        // This might happen before DCE gets initialized and attached to running DTE,
+        // or after destroying the DCE when DTE is up and gets a data event.
+        uart_flush(esp_dte->uart_port);
+        return;
+    }
     size_t length = 0;
     uart_get_buffered_data_len(esp_dte->uart_port, &length);
     if (esp_dte->parent.dce->mode != MODEM_PPP_MODE) {
