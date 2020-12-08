@@ -574,7 +574,7 @@ static esp_err_t sim800_open(modem_dce_t *dce)
     DCE_CHECK(sim800_get_operator_name(sim800_dce) == ESP_OK, "get operator name failed", err_io);
     return ESP_OK;
 err_io:
-    free(dce);
+    free(sim800_dce);
     return ESP_FAIL;
 }
 
