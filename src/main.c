@@ -15,6 +15,7 @@
 #include "esp_modem.h"
 #include "esp_modem_netif.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
 #include "sim800.h"
 #include "bg96.h"
 #include "sim7600.h"
@@ -214,6 +215,11 @@ static void on_ip_event(void *arg, esp_event_base_t event_base,
 
 void app_main(void)
 {
+    /* enable LDO which powered the SIMCOM module */
+    gpio_pad_select_gpio(CONFIG_EXAMPLE_GPIO_MODEM_POWER);
+    gpio_set_direction(CONFIG_EXAMPLE_GPIO_MODEM_POWER, GPIO_MODE_OUTPUT);
+    gpio_set_level(CONFIG_EXAMPLE_GPIO_MODEM_POWER, 1);
+
 #if CONFIG_LWIP_PPP_PAP_SUPPORT
     esp_netif_auth_type_t auth_type = NETIF_PPP_AUTHTYPE_PAP;
 #elif CONFIG_LWIP_PPP_CHAP_SUPPORT
