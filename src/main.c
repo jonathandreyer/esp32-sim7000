@@ -291,6 +291,13 @@ void app_main(void)
         uint32_t voltage = 0, bcs = 0, bcl = 0;
         ESP_ERROR_CHECK(dce->get_battery_status(dce, &bcs, &bcl, &voltage));
         ESP_LOGI(TAG, "Battery voltage: %d mV", voltage);
+
+#if CONFIG_EXAMPLE_SEND_MSG
+        const char *message = "Welcome to ESP32!";
+        ESP_ERROR_CHECK(example_send_message_text(dce, CONFIG_EXAMPLE_SEND_MSG_PEER_PHONE_NUMBER, message));
+        ESP_LOGI(TAG, "Send send message [%s] ok", message);
+#endif
+
         /* setup PPPoS network parameters */
 #if !defined(CONFIG_EXAMPLE_MODEM_PPP_AUTH_NONE) && (defined(CONFIG_LWIP_PPP_PAP_SUPPORT) || defined(CONFIG_LWIP_PPP_CHAP_SUPPORT))
         esp_netif_ppp_set_auth(esp_netif, auth_type, CONFIG_EXAMPLE_MODEM_PPP_AUTH_USERNAME, CONFIG_EXAMPLE_MODEM_PPP_AUTH_PASSWORD);
@@ -314,11 +321,7 @@ void app_main(void)
         ESP_ERROR_CHECK(esp_modem_stop_ppp(dte));
 
         xEventGroupWaitBits(event_group, STOP_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-#if CONFIG_EXAMPLE_SEND_MSG
-        const char *message = "Welcome to ESP32!";
-        ESP_ERROR_CHECK(example_send_message_text(dce, CONFIG_EXAMPLE_SEND_MSG_PEER_PHONE_NUMBER, message));
-        ESP_LOGI(TAG, "Send send message [%s] ok", message);
-#endif
+
         /* Power down module */
         ESP_ERROR_CHECK(dce->power_down(dce));
         ESP_LOGI(TAG, "Power down");
