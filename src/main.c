@@ -45,6 +45,16 @@ static esp_err_t example_default_handle(modem_dce_t *dce, const char *line)
     return err;
 }
 
+static esp_err_t example_handle_phone_number(modem_dce_t *dce, const char *line)
+{
+    esp_err_t err = ESP_FAIL;
+    if (strstr(line, "> ")) {
+        err = esp_modem_process_command_done(dce, MODEM_STATE_SUCCESS);
+    }
+
+    return err;
+}
+
 static esp_err_t example_handle_cmgs(modem_dce_t *dce, const char *line)
 {
     esp_err_t err = ESP_FAIL;
@@ -91,7 +101,17 @@ static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_n
     char command[MODEM_SMS_MAX_LENGTH] = {0};
     int length = snprintf(command, MODEM_SMS_MAX_LENGTH, "AT+CMGS=\"%s\"\r", phone_num);
     /* set phone number and wait for "> " */
-    dte->send_wait(dte, command, length, "\r\n> ", MODEM_PROMPT_TIMEOUT_MS);
+    dce->handle_line = example_handle_phone_number;
+    if (dte->send_cmd(dte, command, MODEM_COMMAND_TIMEOUT_SMS_MS) != ESP_OK) {
+        ESP_LOGE(TAG, "send command failed");
+        goto err;
+    }
+    if (dce->state != MODEM_STATE_SUCCESS) {
+        ESP_LOGE(TAG, "set phone number failed");
+        goto err;
+    }
+    ESP_LOGD(TAG, "set phone number set ok");
+    // dte->send_wait(dte, command, length, "\r\n> ", MODEM_PROMPT_TIMEOUT_MS);
     /* end with CTRL+Z */
     snprintf(command, MODEM_SMS_MAX_LENGTH, "%s\x1A", text);
     dce->handle_line = example_handle_cmgs;
