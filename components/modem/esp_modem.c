@@ -330,7 +330,21 @@ err:
     return -1;
 }
 
-
+/**
+ * @brief Handle response from AT+CMGS="+86xxxxx".
+ */
+static esp_err_t esp_modem_dte_send_wait_default_handle(modem_dce_t *dce, const char *line)
+{
+    esp_err_t err = ESP_FAIL;
+    if (!strncmp(line, dce->prompt, strlen(dce->prompt))) {
+        dce->state = MODEM_STATE_SUCCESS;
+        err = dce->dte->process_cmd_done(dce->dte);
+    } else {
+        dce->state = MODEM_STATE_FAIL;
+        err = dce->dte->process_cmd_done(dce->dte);
+    }
+    return err;
+}
 
 /**
  * @brief Send data and wait for prompt from DCE
@@ -349,22 +363,25 @@ static esp_err_t esp_modem_dte_send_wait(modem_dte_t *dte, const char *data, uin
 {
     MODEM_CHECK(data, "data is NULL", err_param);
     MODEM_CHECK(prompt, "prompt is NULL", err_param);
+    modem_dce_t *dce = dte->dce;
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
-    // We'd better disable pattern detection here for a moment in case prompt string contains the pattern character
-    uart_disable_pattern_det_intr(esp_dte->uart_port);
-    // uart_disable_rx_intr(esp_dte->uart_port);
-    MODEM_CHECK(uart_write_bytes(esp_dte->uart_port, data, length) >= 0, "uart write bytes failed", err_write);
-    uint32_t len = strlen(prompt);
-    uint8_t *buffer = calloc(len + 1, sizeof(uint8_t));
-    int res = uart_read_bytes(esp_dte->uart_port, buffer, len, pdMS_TO_TICKS(timeout));
-    MODEM_CHECK(res >= len, "wait prompt [%s] timeout", err, prompt);
-    MODEM_CHECK(!strncmp(prompt, (const char *)buffer, len), "get wrong prompt: %s", err, buffer);
-    free(buffer);
+    // We'd better change pattern detection here for a moment in case prompt string contains the pattern character
+    uart_enable_pattern_det_baud_intr(esp_dte->uart_port, ' ', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
+    dce->prompt = prompt;
+    dce->handle_line = esp_modem_dte_send_wait_default_handle;
+    if (dte->send_cmd(dte, data, MODEM_COMMAND_TIMEOUT_DEFAULT) != ESP_OK) {
+        ESP_LOGE(MODEM_TAG, "set phone number failed");
+        goto err;
+    }
+    if (dce->state != MODEM_STATE_SUCCESS) {
+        ESP_LOGE(MODEM_TAG, "wait for prompt failed");
+        goto err;
+    }
+    dce->prompt = NULL;
     uart_enable_pattern_det_baud_intr(esp_dte->uart_port, '\n', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
     return ESP_OK;
 err:
-    free(buffer);
-err_write:
+    dce->prompt = NULL;
     uart_enable_pattern_det_baud_intr(esp_dte->uart_port, '\n', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
 err_param:
     return ESP_FAIL;

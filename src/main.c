@@ -60,7 +60,7 @@ static esp_err_t example_handle_cmgs(modem_dce_t *dce, const char *line)
 
 #define MODEM_SMS_MAX_LENGTH (128)
 #define MODEM_COMMAND_TIMEOUT_SMS_MS (120000)
-#define MODEM_PROMPT_TIMEOUT_MS (10)
+#define MODEM_PROMPT_TIMEOUT_MS (1000)
 
 static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_num, const char *text)
 {
@@ -86,12 +86,13 @@ static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_n
         ESP_LOGE(TAG, "set character set failed");
         goto err;
     }
-    ESP_LOGD(TAG, "set character set ok");
+    ESP_LOGI(TAG, "set character set ok");
     /* send message */
     char command[MODEM_SMS_MAX_LENGTH] = {0};
     int length = snprintf(command, MODEM_SMS_MAX_LENGTH, "AT+CMGS=\"%s\"\r", phone_num);
     /* set phone number and wait for "> " */
     dte->send_wait(dte, command, length, "\r\n> ", MODEM_PROMPT_TIMEOUT_MS);
+    ESP_LOGI(TAG, "set phone number set ok");
     /* end with CTRL+Z */
     snprintf(command, MODEM_SMS_MAX_LENGTH, "%s\x1A", text);
     dce->handle_line = example_handle_cmgs;
@@ -103,7 +104,7 @@ static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_n
         ESP_LOGE(TAG, "send message failed");
         goto err;
     }
-    ESP_LOGD(TAG, "send message ok");
+    ESP_LOGI(TAG, "send message ok");
     return ESP_OK;
 err:
     return ESP_FAIL;
