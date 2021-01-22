@@ -323,6 +323,12 @@ void app_main(void)
 
         xEventGroupWaitBits(event_group, STOP_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
 
+#if CONFIG_EXAMPLE_SEND_MSG
+        const char *message_2nd = "Hi from ESP32!";
+        ESP_ERROR_CHECK(example_send_message_text(dce, CONFIG_EXAMPLE_SEND_MSG_PEER_PHONE_NUMBER, message_2nd));
+        ESP_LOGI(TAG, "Send send message [%s] ok", message_2nd);
+#endif
+
         /* Power down module */
         ESP_ERROR_CHECK(dce->power_down(dce));
         ESP_LOGI(TAG, "Power down");
