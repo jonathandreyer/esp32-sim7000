@@ -331,7 +331,7 @@ err:
 }
 
 /**
- * @brief Handle response from AT+CMGS="+86xxxxx".
+ * @brief Handle response from send data and wait from prompt
  */
 static esp_err_t esp_modem_dte_send_wait_default_handle(modem_dce_t *dce, const char *line)
 {
@@ -364,19 +364,14 @@ static esp_err_t esp_modem_dte_send_wait(modem_dte_t *dte, const char *data, uin
     MODEM_CHECK(data, "data is NULL", err_param);
     MODEM_CHECK(prompt, "prompt is NULL", err_param);
     modem_dce_t *dce = dte->dce;
+    MODEM_CHECK(dce, "DTE has not yet bind with DCE", err_param);
     esp_modem_dte_t *esp_dte = __containerof(dte, esp_modem_dte_t, parent);
     // We'd better change pattern detection here for a moment in case prompt string contains the pattern character
     uart_enable_pattern_det_baud_intr(esp_dte->uart_port, ' ', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
     dce->prompt = prompt;
     dce->handle_line = esp_modem_dte_send_wait_default_handle;
-    if (dte->send_cmd(dte, data, MODEM_COMMAND_TIMEOUT_DEFAULT) != ESP_OK) {
-        ESP_LOGE(MODEM_TAG, "set phone number failed");
-        goto err;
-    }
-    if (dce->state != MODEM_STATE_SUCCESS) {
-        ESP_LOGE(MODEM_TAG, "wait for prompt failed");
-        goto err;
-    }
+    MODEM_CHECK(dte->send_cmd(dte, data, timeout) == ESP_OK, "wait for prompt timeout", err);
+    MODEM_CHECK(dce->state == MODEM_STATE_SUCCESS, "wait for prompt failed", err);
     dce->prompt = NULL;
     uart_enable_pattern_det_baud_intr(esp_dte->uart_port, '\n', 1, MIN_PATTERN_INTERVAL, MIN_POST_IDLE, MIN_PRE_IDLE);
     return ESP_OK;

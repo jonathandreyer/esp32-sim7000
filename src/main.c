@@ -60,7 +60,7 @@ static esp_err_t example_handle_cmgs(modem_dce_t *dce, const char *line)
 
 #define MODEM_SMS_MAX_LENGTH (128)
 #define MODEM_COMMAND_TIMEOUT_SMS_MS (120000)
-#define MODEM_PROMPT_TIMEOUT_MS (1000)
+#define MODEM_PROMPT_TIMEOUT_MS (100)
 
 static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_num, const char *text)
 {
@@ -75,7 +75,7 @@ static esp_err_t example_send_message_text(modem_dce_t *dce, const char *phone_n
         ESP_LOGE(TAG, "set message format failed");
         goto err;
     }
-    ESP_LOGD(TAG, "set message format ok");
+    ESP_LOGI(TAG, "set message format ok");
     /* Specify character set */
     dce->handle_line = example_default_handle;
     if (dte->send_cmd(dte, "AT+CSCS=\"GSM\"\r", MODEM_COMMAND_TIMEOUT_DEFAULT) != ESP_OK) {
